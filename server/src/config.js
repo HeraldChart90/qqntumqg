@@ -1,0 +1,57 @@
+// Settings come only from environment variables (.env on the server). Keys never go into the app.
+const env = process.env;
+const int = (name, fallback) => {
+  const value = Number.parseInt(env[name] ?? '', 10);
+  return Number.isFinite(value) ? value : fallback;
+};
+
+export const config = {
+  port: int('PORT', 8080),
+  /** Optional shared token the app sends in X-App-Token (filters random bots; real protection = limits below). */
+  appToken: env.APP_TOKEN || '',
+  /** Order of text providers: the first that works answers, the next is the fallback. */
+  providers: (env.AI_PROVIDERS || 'gigachat,yandex').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  dataDir: env.DATA_DIR || './data',
+
+  gigachat: {
+    authKey: env.GIGACHAT_AUTH_KEY || '',
+    scope: env.GIGACHAT_SCOPE || 'GIGACHAT_API_PERS',
+    model: env.GIGACHAT_MODEL || 'GigaChat-2-Max',
+    oauthURL: env.GIGACHAT_OAUTH_URL || 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth',
+    /** Several base URLs are documented; the first that answers is remembered. */
+    bases: (env.GIGACHAT_BASE || 'https://api.giga.chat/api/v1,https://api.giga.chat/v1,https://gigachat.devices.sberbank.ru/api/v1')
+      .split(',').map((s) => s.trim().replace(/\/$/, '')).filter(Boolean),
+  },
+
+  yandex: {
+    apiKey: env.YANDEX_API_KEY || '',
+    folderId: env.YANDEX_FOLDER_ID || '',
+    model: env.YANDEX_MODEL || 'yandexgpt/latest',
+    visionModel: env.YANDEX_VISION_MODEL || 'qwen3.6-35b-a3b',
+    artModel: env.YANDEX_ART_MODEL || 'yandex-art/latest',
+    bases: (env.YANDEX_BASE || 'https://ai.api.cloud.yandex.net/v1,https://llm.api.cloud.yandex.net/v1')
+      .split(',').map((s) => s.trim().replace(/\/$/, '')).filter(Boolean),
+    nativeBase: env.YANDEX_NATIVE_BASE || 'https://llm.api.cloud.yandex.net',
+  },
+
+  /** Optional photoreal engines for editing the exact 3D render. */
+  bfl: { apiKey: env.BFL_API_KEY || '', model: env.BFL_MODEL || 'flux-kontext-max' },
+  openai: { apiKey: env.OPENAI_API_KEY || '', imageModel: env.OPENAI_IMAGE_MODEL || 'gpt-image-2' },
+
+  /** Daily limits per installation (X-Install-ID) and per IP address. */
+  limits: {
+    search: int('LIMIT_SEARCH', 200),
+    chat: int('LIMIT_CHAT', 150),
+    json: int('LIMIT_JSON', 25),
+    vision: int('LIMIT_VISION', 40),
+    imageEdit: int('LIMIT_IMAGE_EDIT', 24),
+    image: int('LIMIT_IMAGE', 15),
+    ipMultiplier: int('LIMIT_IP_MULTIPLIER', 4),
+    /** Requests per minute per installation, all kinds together. */
+    perMinute: int('LIMIT_PER_MINUTE', 20),
+  },
+  maxBodyBytes: int('MAX_BODY_MB', 16) * 1024 * 1024,
+};
+
+export const hasGigaChat = () => Boolean(config.gigachat.authKey);
+export const hasYandex = () => Boolean(config.yandex.apiKey && config.yandex.folderId);

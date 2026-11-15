@@ -1,0 +1,20 @@
+# macOS / Xcode
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Local API keys and server settings
+Markaryan/ClaudeKey.plist
+Markaryan/OpenAIKey.plist
+Markaryan/FluxKey.plist
+Markaryan/AIServer.plist
+server/.env
+server/data/
+server/node_modules/
+
+# Local archives and generated outputs
+_Backup_v1.0/
+_Старое обновление (не открывать)/
+Claude outputs/

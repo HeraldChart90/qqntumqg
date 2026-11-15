@@ -1,0 +1,84 @@
+export class ApiError extends Error {
+  /** @param {number} status HTTP status for the app  @param {string} message Russian text shown to the user */
+  constructor(status, message, { retryable = false } = {}) {
+    super(message);
+    this.status = status;
+    this.retryable = retryable;
+  }
+}
+
+/** fetch with a timeout; network failures become retryable ApiErrors. */
+export async function request(url, options = {}, timeoutMs = 170_000) {
+  try {
+    return await fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    const reason = error?.cause?.code || error?.name || error?.message || 'network';
+    throw new ApiError(502, `Сервис ИИ недоступен (${reason}).`, { retryable: true });
+  }
+}
+
+export async function readJSON(response) {
+  const text = await response.text();
+  try { return JSON.parse(text); } catch { return { raw: text.slice(0, 500) }; }
+}
+
+/** Reads server-sent events: calls onData(payloadString) for every `data:` line. */
+export async function readSSE(response, onData) {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let index;
+    while ((index = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, index).replace(/\r$/, '');
+      buffer = buffer.slice(index + 1);
+      if (line.startsWith('data:')) {
+        const payload = line.slice(5).trim();
+        if (payload) { if (onData(payload) === false) return; }
+      }
+    }
+  }
+  const rest = buffer.trim();
+  if (rest.startsWith('data:')) onData(rest.slice(5).trim());
+}
+
+/**
+ * Extracts a JSON object from model text: code fences, text around it, and a cut‑off end
+ * (closes open strings, arrays and objects) are all handled.
+ */
+export function parseLooseJSON(text) {
+  if (text && typeof text === 'object') return text;
+  let source = String(text ?? '').trim().replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+  const start = source.indexOf('{');
+  if (start < 0) throw new ApiError(502, 'ИИ ответил без данных. Попробуйте ещё раз.', { retryable: true });
+  source = source.slice(start);
+  try { return JSON.parse(source.slice(0, source.lastIndexOf('}') + 1)); } catch { /* repair below */ }
+  // Repair a truncated answer.
+  const stack = [];
+  let inString = false, escaped = false, lastSafe = 0;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') stack.push(ch === '{' ? '}' : ']');
+    else if (ch === '}' || ch === ']') { stack.pop(); if (stack.length === 0) { lastSafe = i + 1; break; } }
+    else if (ch === ',') lastSafe = i;
+  }
+  let candidate = lastSafe > 0 && stack.length === 0 ? source.slice(0, lastSafe) : source;
+  if (stack.length > 0) {
+    candidate = candidate.replace(/,\s*$/, '');
+    if (inString) candidate += '"';
+    candidate = candidate.replace(/,\s*"[^"]*"\s*:?\s*"?$/, '').replace(/,\s*$/, '');
+    candidate += stack.reverse().join('');
+  }
+  try { return JSON.parse(candidate); } catch {
+    throw new ApiError(502, 'ИИ ответил не полностью. Попробуйте ещё раз.', { retryable: true });
+  }
+}
+
+export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

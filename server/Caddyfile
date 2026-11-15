@@ -1,0 +1,7 @@
+# Замените ai.example.ru на свой домен (A‑запись домена → IP сервера).
+ai.example.ru {
+	encode gzip
+	reverse_proxy ai:8080 {
+		flush_interval -1
+	}
+}

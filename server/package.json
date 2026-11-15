@@ -1,0 +1,14 @@
+{
+  "name": "artstroy-ai-server",
+  "version": "1.0.0",
+  "description": "АртСтрой: сервер ИИ для iPhone‑приложения (ключи хранятся только здесь)",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
